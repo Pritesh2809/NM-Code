@@ -8,7 +8,7 @@
   <style>
     :root{
       --bg:#0a0a0f; --fg:#e5e7eb; --muted:#9ca3af; --accent:#52ffa8;
-      --card:#101118; --danger:#ef4444;
+      --card:#101118; --danger:#ef4444; --purple:#a78bfa; --blue:#60a5fa;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -28,9 +28,9 @@
     canvas{display:block; width:100%; height:auto; background:linear-gradient(180deg,#0c0f1c 0%, #0b0d16 55%, #0a0a0f 100%);
       border-radius:14px; border:1px solid #1f2335}
     .hud{display:flex; align-items:center; justify-content:space-between; margin-top:10px; font-variant-numeric:tabular-nums}
-    .btn{background:#14182a; border:1px solid #1f2335; color:var(--fg); padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:600; transition: background-color 0.2s ease;}
-    .btn:hover{background:#17203b}
-    .score{font-weight:700}
+    .btn{background:#14182a; border:1px solid #1f2335; color:var(--fg); padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:600; transition: all 0.2s ease;}
+    .btn:hover{background:#17203b; transform:translateY(-1px); box-shadow:0 4px 12px rgba(82,255,168,.2)}
+    .score{font-weight:700; font-size:18px; text-shadow:0 0 8px rgba(82,255,168,.3)}
 
     /* Overlay for clue */
     .overlay{position:fixed; inset:0; display:none; place-items:center; backdrop-filter:blur(6px) saturate(120%); background:rgba(3,6,15,.55);}
@@ -47,25 +47,40 @@
     .row{display:flex; gap:10px; flex-wrap:wrap}
     .row .btn{flex:1}
 
-    /* Simple glow for milestone text */
+    /* Enhanced animations */
     .milestone{animation:glow 1.4s ease-in-out infinite alternate}
     @keyframes glow{from{text-shadow:0 0 0 rgba(82,255,168,.2)} to{ text-shadow:0 0 16px rgba(82,255,168,.6) }}
 
+    .pulse{animation:pulse 2s ease-in-out infinite}
+    @keyframes pulse{0%, 100%{opacity:0.6} 50%{opacity:1}}
+
+    .float{animation:float 3s ease-in-out infinite}
+    @keyframes float{0%, 100%{transform:translateY(0px)} 50%{transform:translateY(-10px)}}
+
     .footer{margin-top:12px; color:#9aa3c2; font-size:12px}
+
+    /* Particle effects */
+    .particle{position:absolute; width:2px; height:2px; background:var(--accent); border-radius:50%; animation:particle 4s linear infinite}
+    @keyframes particle{
+      0%{opacity:0; transform:translateY(0) scale(0)}
+      10%{opacity:1; transform:translateY(-20px) scale(1)}
+      90%{opacity:1; transform:translateY(-200px) scale(1)}
+      100%{opacity:0; transform:translateY(-220px) scale(0)}
+    }
   </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>🦖 Dino Run – EDC KPRCAS <span class="hint">(Clue unlocks at <strong>3301</strong>)</span></h1>
-    <button id="resetBtn" class="btn" title="Restart (R)">Restart</button>
+    <h1>🦖 Dino Run – EDC KPRCAS <span class="hint">(Clue unlocks at <strong class="milestone">3301</strong>)</span></h1>
+    <button id="resetBtn" class="btn" title="Restart (R)">🔄 Restart</button>
   </header>
 
   <div class="panel">
     <canvas id="game" width="900" height="240" aria-label="Dino game canvas"></canvas>
     <div class="hud">
       <div>
-        <button id="jumpBtn" class="btn" title="Jump (Space/↑/Tap)">Jump</button>
+        <button id="jumpBtn" class="btn float" title="Jump (Space/↑/Tap)">🚀 Jump</button>
         <span class="hint">Space / ↑ or tap to jump</span>
       </div>
       <div class="score">Score: <span id="score">0</span></div>
@@ -77,14 +92,14 @@
 <!-- Secret Clue Overlay -->
 <div class="overlay" id="overlay" role="dialog" aria-modal="true">
   <div class="card">
-    <div class="badge">Milestone Reached</div>
-    <h2 class="milestone" style="margin:0 0 4px">Score ≥ 3301</h2>
+    <div class="badge pulse">✨ Milestone Reached</div>
+    <h2 class="milestone" style="margin:0 0 4px">🎯 Score ≥ 3301</h2>
     <p class="hint" style="margin:0 0 10px">You earned a fragment. Decode and proceed.</p>
     <div id="clue" class="clue">…</div>
     <div class="row">
-      <button id="copyBtn" class="btn">Copy clue</button>
-      <button id="nextBtn" class="btn">Go to Next Level</button>
-      <button id="closeBtn" class="btn">Keep Playing</button>
+      <button id="copyBtn" class="btn">📋 Copy clue</button>
+      <button id="nextBtn" class="btn">🚀 Go to Next Level</button>
+      <button id="closeBtn" class="btn">🎮 Keep Playing</button>
     </div>
   </div>
 </div>
@@ -93,13 +108,10 @@
   // =====================
   // SETTINGS (MODIFIED FOR EDC KPRCAS)
   // =====================
-  // Base64-encoded default clue. New clue points to the role of the EDC.
   const DEFAULT_CLUE_B64 = "WW91ciBuZXh0IGNoYWxsZW5nZSBhd2FpdHMgd2hlcmUgY2FtcHVzIHN0YXJ0dXBzIGFyZSBib3JuLiBQcm9jZWVkIHRvIHRoZSBkaWdpdGFsIGhvbWUgb2Ygb3VyIGNvbGxlZ2UncyBpbm5vdmF0b3JzLg==";
-  // Redirect to the official EDC KPRCAS website.
   const DEFAULT_NEXT_URL = "https://edckprcas.co.in";
   const TARGET_SCORE = 3301;
 
-  // Read overrides from URL (?clue=... &next=...)
   const params = new URLSearchParams(location.search);
   const overrideClue = params.get("clue");
   const overrideNext = params.get("next");
@@ -110,7 +122,7 @@
   }
 
   // =====================
-  // Minimal Dino Engine
+  // Enhanced Visual Game Engine
   // =====================
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
@@ -118,33 +130,80 @@
 
   let last = performance.now();
   let running = true;
-  let speed = 5.5; // world speed
-  let gravity = 0.6; // pixels per frame^2
-  let scoreFloat = 0; // high-res score accumulator
+  let speed = 5.5;
+  let gravity = 0.6;
+  let scoreFloat = 0;
   let score = 0;
   let clueShown = false;
+
+  // Particle system
+  const particles = [];
+  const stars = [];
+
+  // Initialize stars
+  for(let i=0; i<50; i++){
+    stars.push({
+      x: Math.random() * W,
+      y: Math.random() * H * 0.7,
+      size: Math.random() * 2 + 0.5,
+      speed: Math.random() * 0.5 + 0.2,
+      opacity: Math.random() * 0.8 + 0.2
+    });
+  }
 
   const dino = {
     x: 60, y: H-70, w: 36, h: 42,
     vy: 0, onGround: true,
-    jump(){ if(this.onGround){ this.vy = -12.5; this.onGround = false; }}
+    animFrame: 0,
+    jump(){ if(this.onGround){ this.vy = -12.5; this.onGround = false; createJumpParticles(); }}
   };
 
   const ground = { y: H-24 };
-
   const cacti = [];
   let spawnTimer = 0;
+
+  function createJumpParticles(){
+    for(let i=0; i<5; i++){
+      particles.push({
+        x: dino.x + Math.random() * dino.w,
+        y: dino.y + dino.h,
+        vx: (Math.random() - 0.5) * 4,
+        vy: Math.random() * -3 - 2,
+        life: 30,
+        maxLife: 30,
+        color: `hsl(${120 + Math.random()*60}, 70%, 60%)`
+      });
+    }
+  }
+
+  function createScoreParticles(x, y){
+    for(let i=0; i<3; i++){
+      particles.push({
+        x: x + Math.random() * 20,
+        y: y + Math.random() * 20,
+        vx: (Math.random() - 0.5) * 2,
+        vy: Math.random() * -2 - 1,
+        life: 20,
+        maxLife: 20,
+        color: '#52ffa8'
+      });
+    }
+  }
 
   function spawnCactus(){
     const w = 18 + Math.random()*16;
     const h = 26 + Math.random()*36;
-    cacti.push({ x: W+20, y: ground.y - h, w, h });
+    cacti.push({
+      x: W+20, y: ground.y - h, w, h,
+      type: Math.random() > 0.5 ? 'cactus' : 'rock'
+    });
   }
 
   function reset(){
     running = true; speed = 5.5; score = 0; scoreFloat = 0; clueShown = false;
-    dino.x = 60; dino.y = H-70; dino.vy=0; dino.onGround = true;
+    dino.x = 60; dino.y = H-70; dino.vy=0; dino.onGround = true; dino.animFrame = 0;
     cacti.length = 0; spawnTimer = 0; last = performance.now();
+    particles.length = 0;
     document.getElementById('overlay').style.display='none';
     loop(last);
   }
@@ -153,94 +212,318 @@
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   }
 
-  function drawDino(){
-    // A simple, abstract dino representation
-    ctx.fillStyle = '#e5e7eb';
-    ctx.fillRect(dino.x, dino.y, dino.w, dino.h); // body
-    ctx.fillRect(dino.x + dino.w - 10, dino.y - 12, 16, 16); // head
-    ctx.fillStyle = '#0a0a0f';
-    ctx.fillRect(dino.x + dino.w + 2, dino.y - 6, 3, 3); // eye
-    ctx.fillRect(dino.x + 6, dino.y + dino.h - 8, 6, 6); // leg notch
-  }
+  function drawEnhancedDino(){
+    // Running animation
+    dino.animFrame += dino.onGround ? 0.3 : 0;
 
-  function drawGround(){
-    ctx.fillStyle = '#111522';
-    ctx.fillRect(0, ground.y, W, 2);
-    // Dotted terrain for a sense of motion
-    for(let i=0;i<W;i+=8){
-      ctx.fillRect((i - (performance.now()/8)%8 + W)%W, ground.y+6, 3, 3);
+    // Body with gradient effect
+    const gradient = ctx.createLinearGradient(dino.x, dino.y, dino.x, dino.y + dino.h);
+    gradient.addColorStop(0, '#e5e7eb');
+    gradient.addColorStop(1, '#9ca3af');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(dino.x, dino.y, dino.w, dino.h);
+
+    // Head with glow
+    ctx.shadowColor = '#52ffa8';
+    ctx.shadowBlur = score > 2500 ? 10 : 0;
+    ctx.fillStyle = '#e5e7eb';
+    ctx.fillRect(dino.x + dino.w - 10, dino.y - 12, 16, 16);
+    ctx.shadowBlur = 0;
+
+    // Animated eye
+    ctx.fillStyle = '#0a0a0f';
+    const eyeY = dino.y - 6 + Math.sin(performance.now() * 0.01) * 0.5;
+    ctx.fillRect(dino.x + dino.w + 2, eyeY, 3, 3);
+
+    // Running legs animation
+    if(dino.onGround){
+      const legOffset = Math.sin(dino.animFrame) * 2;
+      ctx.fillRect(dino.x + 6, dino.y + dino.h - 8 + legOffset, 6, 6);
+      ctx.fillRect(dino.x + 20, dino.y + dino.h - 8 - legOffset, 6, 6);
+    } else {
+      ctx.fillRect(dino.x + 6, dino.y + dino.h - 8, 6, 6);
+      ctx.fillRect(dino.x + 20, dino.y + dino.h - 8, 6, 6);
+    }
+
+    // Speed trail effect
+    if(speed > 8){
+      ctx.globalAlpha = 0.3;
+      for(let i=1; i<=3; i++){
+        ctx.fillStyle = `hsl(${120 + i*10}, 70%, 60%)`;
+        ctx.fillRect(dino.x - i*8, dino.y, dino.w, dino.h);
+      }
+      ctx.globalAlpha = 1;
     }
   }
 
-  function drawCactus(c){
-    ctx.fillStyle = '#a5b4fc';
-    ctx.fillRect(c.x, c.y, c.w, c.h);
-    // Arms for the cactus
-    ctx.fillRect(c.x-6, c.y+6, 6, 14);
-    ctx.fillRect(c.x+c.w, c.y+10, 6, 14);
+  function drawEnhancedGround(){
+    // Ground with pattern
+    ctx.fillStyle = '#111522';
+    ctx.fillRect(0, ground.y, W, 4);
+
+    // Moving ground pattern
+    ctx.fillStyle = '#1f2335';
+    for(let i=0; i<W; i+=12){
+      const x = (i - (performance.now()/10)%12 + W)%W;
+      ctx.fillRect(x, ground.y+6, 6, 2);
+      ctx.fillRect(x+2, ground.y+10, 2, 4);
+    }
+
+    // Underground layers
+    ctx.fillStyle = '#0a0d14';
+    ctx.fillRect(0, ground.y+16, W, 8);
+  }
+
+  function drawEnhancedCactus(c){
+    if(c.type === 'rock'){
+      // Draw rock obstacle
+      const rockGrad = ctx.createLinearGradient(c.x, c.y, c.x, c.y + c.h);
+      rockGrad.addColorStop(0, '#6b7280');
+      rockGrad.addColorStop(1, '#374151');
+      ctx.fillStyle = rockGrad;
+      ctx.fillRect(c.x, c.y, c.w, c.h);
+
+      // Rock highlights
+      ctx.fillStyle = '#9ca3af';
+      ctx.fillRect(c.x + 2, c.y + 2, c.w/3, 3);
+      ctx.fillRect(c.x + c.w - 6, c.y + c.h/2, 4, 4);
+    } else {
+      // Enhanced cactus
+      const cactusGrad = ctx.createLinearGradient(c.x, c.y, c.x, c.y + c.h);
+      cactusGrad.addColorStop(0, '#52ffa8');
+      cactusGrad.addColorStop(1, '#059669');
+      ctx.fillStyle = cactusGrad;
+      ctx.fillRect(c.x, c.y, c.w, c.h);
+
+      // Cactus arms
+      ctx.fillRect(c.x-6, c.y+6, 6, 14);
+      ctx.fillRect(c.x+c.w, c.y+10, 6, 14);
+
+      // Cactus spikes
+      ctx.fillStyle = '#065f46';
+      for(let i=0; i<c.h; i+=8){
+        ctx.fillRect(c.x-1, c.y+i, 2, 3);
+        ctx.fillRect(c.x+c.w-1, c.y+i+4, 2, 3);
+      }
+    }
+  }
+
+  function updateParticles(delta){
+    for(let i = particles.length - 1; i >= 0; i--){
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.1; // gravity
+      p.life--;
+
+      if(p.life <= 0){
+        particles.splice(i, 1);
+      }
+    }
+  }
+
+  function drawParticles(){
+    particles.forEach(p => {
+      const alpha = p.life / p.maxLife;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x-1, p.y-1, 2, 2);
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  function drawStars(){
+    stars.forEach(star => {
+      star.x -= star.speed;
+      if(star.x < -5) star.x = W + 5;
+
+      ctx.globalAlpha = star.opacity * (0.5 + 0.5 * Math.sin(performance.now() * 0.003 + star.x));
+      ctx.fillStyle = '#52ffa8';
+      ctx.fillRect(star.x, star.y, star.size, star.size);
+    });
+    ctx.globalAlpha = 1;
   }
 
   function update(delta){
-    // Speed up slightly over time for increasing difficulty
     speed += delta * 0.0004;
 
-    // Gravity and jump physics
+    // Physics
     dino.vy += gravity; dino.y += dino.vy;
-    if(dino.y + dino.h >= ground.y){ dino.y = ground.y - dino.h; dino.vy = 0; dino.onGround = true; }
+    if(dino.y + dino.h >= ground.y){
+      dino.y = ground.y - dino.h; dino.vy = 0; dino.onGround = true;
+      if(Math.abs(dino.vy) > 8) createJumpParticles(); // Landing particles
+    }
 
-    // Spawn and move obstacles
+    // Spawn obstacles
     spawnTimer -= delta;
     if(spawnTimer <= 0){
       spawnCactus();
-      spawnTimer = 650 + Math.random()*600 - speed*20; // Slightly faster spawns over time
-      if(spawnTimer < 320) spawnTimer = 320; // Set a minimum spawn delay
+      spawnTimer = 650 + Math.random()*600 - speed*20;
+      if(spawnTimer < 320) spawnTimer = 320;
     }
+
+    // Update obstacles
     for(let i=cacti.length-1;i>=0;i--){
       const c = cacti[i]; c.x -= speed* (delta/16);
-      if(c.x + c.w < -40) cacti.splice(i,1); // Remove off-screen cacti
+      if(c.x + c.w < -40) {
+        cacti.splice(i,1);
+        // Score particles for clearing obstacles
+        if(Math.random() < 0.3) createScoreParticles(50, 50);
+      }
       if(collide({x:dino.x+4,y:dino.y+2,w:dino.w-8,h:dino.h-4}, c)){
         gameOver();
       }
     }
 
-    // Update score
+    // Update score with visual effects
     scoreFloat += delta * 0.15;
     const newScore = Math.floor(scoreFloat);
     if(newScore !== score){
-      score = newScore; document.getElementById('score').textContent = score;
+      score = newScore;
+      document.getElementById('score').textContent = score;
+
+      // Create score milestone particles
+      if(score % 100 === 0 && score > 0){
+        createScoreParticles(W-100, 30);
+      }
+
+      // Special effects at certain milestones
+      if(score === 1000 || score === 2000 || score === 3000){
+        for(let i=0; i<10; i++){
+          particles.push({
+            x: W/2 + (Math.random()-0.5) * 100,
+            y: H/2 + (Math.random()-0.5) * 50,
+            vx: (Math.random()-0.5) * 6,
+            vy: Math.random() * -4 - 2,
+            life: 40,
+            maxLife: 40,
+            color: '#a78bfa'
+          });
+        }
+      }
+
       if(score >= TARGET_SCORE && !clueShown){ revealClue(); }
     }
+
+    // Update particles
+    updateParticles(delta);
   }
 
   function gameOver(){
     running = false;
-    // Flash effect on game over
+
+    // Death explosion particles
+    for(let i=0; i<15; i++){
+      particles.push({
+        x: dino.x + dino.w/2,
+        y: dino.y + dino.h/2,
+        vx: (Math.random()-0.5) * 8,
+        vy: (Math.random()-0.5) * 8,
+        life: 50,
+        maxLife: 50,
+        color: '#ef4444'
+      });
+    }
+
+    // Screen flash effect
     ctx.save();
-    ctx.globalAlpha = 0.18; ctx.fillStyle = '#ef4444'; ctx.fillRect(0,0,W,H); ctx.restore();
-    // Game over text
-    ctx.fillStyle = '#fca5a5'; ctx.font = 'bold 20px ui-sans-serif, system-ui';
-    ctx.fillText('Game Over – Press R to Restart', W/2 - 150, H/2);
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+
+    // Game over text with glow
+    ctx.save();
+    ctx.shadowColor = '#ef4444';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = '#fca5a5';
+    ctx.font = 'bold 20px ui-sans-serif, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('💥 Game Over – Press R to Restart', W/2, H/2);
+    ctx.restore();
   }
 
   function render(){
     ctx.clearRect(0,0,W,H);
-    drawGround();
-    // Parallax clouds for depth
-    ctx.globalAlpha = 0.35; ctx.fillStyle = '#6b7280';
-    for(let i=0;i<3;i++){
-      const x = ( (performance.now()/ (30+ i*20)) % (W+160) ) - 80;
-      ctx.fillRect(W - x, 40 + i*18, 40 + i*10, 10 + i*3);
+
+    // Background stars
+    drawStars();
+
+    // Enhanced ground
+    drawEnhancedGround();
+
+    // Parallax clouds with improved depth
+    ctx.globalAlpha = 0.25;
+    for(let i=0;i<4;i++){
+      const speed = 25 + i*15;
+      const x = ((performance.now()/speed) % (W+160)) - 80;
+      const gradient = ctx.createRadialGradient(W-x+20, 35+i*18, 0, W-x+20, 35+i*18, 30+i*8);
+      gradient.addColorStop(0, '#6366f1');
+      gradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(W - x, 35 + i*18, 40 + i*10, 8 + i*3);
     }
     ctx.globalAlpha = 1;
 
-    // Dino and obstacles
-    drawDino();
-    cacti.forEach(drawCactus);
+    // Enhanced dino
+    drawEnhancedDino();
 
-    // Thematic watermark
-    ctx.globalAlpha = 0.07; ctx.font='900 120px ui-sans-serif, system-ui'; ctx.fillStyle='#52ffa8';
+    // Enhanced obstacles
+    cacti.forEach(drawEnhancedCactus);
+
+    // Particle effects
+    drawParticles();
+
+    // Thematic watermark with pulsing effect
+    ctx.save();
+    const pulseAlpha = 0.04 + 0.03 * Math.sin(performance.now() * 0.002);
+    ctx.globalAlpha = pulseAlpha;
+    ctx.font = '900 120px ui-sans-serif, system-ui';
+
+    // Gradient text effect
+    const textGradient = ctx.createLinearGradient(W-360, 0, W-360, 140);
+    textGradient.addColorStop(0, '#52ffa8');
+    textGradient.addColorStop(1, '#059669');
+    ctx.fillStyle = textGradient;
     ctx.fillText('3301', W-360, 140);
-    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Speed indicator
+    if(speed > 7){
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, (speed - 7) / 5);
+      ctx.fillStyle = '#60a5fa';
+      ctx.font = 'bold 14px ui-sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`🚀 SPEED BOOST ${Math.floor(speed)}x`, 20, 30);
+      ctx.restore();
+    }
+
+    // Progress bar for 3301 target
+    if(score > 0 && score < TARGET_SCORE){
+      const progress = score / TARGET_SCORE;
+      const barWidth = 200;
+      const barHeight = 8;
+      const barX = W - barWidth - 20;
+      const barY = 50;
+
+      // Background bar
+      ctx.fillStyle = '#1f2335';
+      ctx.fillRect(barX, barY, barWidth, barHeight);
+
+      // Progress bar with gradient
+      const progressGradient = ctx.createLinearGradient(barX, 0, barX + barWidth * progress, 0);
+      progressGradient.addColorStop(0, '#52ffa8');
+      progressGradient.addColorStop(1, '#a78bfa');
+      ctx.fillStyle = progressGradient;
+      ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+
+      // Progress text
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '12px ui-sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${score}/${TARGET_SCORE}`, barX + barWidth, barY - 5);
+    }
   }
 
   function loop(t){
@@ -250,47 +533,83 @@
 
   function revealClue(){
     clueShown = true; running = false;
+
+    // Victory particles explosion
+    for(let i=0; i<25; i++){
+      particles.push({
+        x: W/2,
+        y: H/2,
+        vx: (Math.random()-0.5) * 12,
+        vy: (Math.random()-0.5) * 12,
+        life: 60,
+        maxLife: 60,
+        color: Math.random() > 0.5 ? '#52ffa8' : '#a78bfa'
+      });
+    }
+
     const overlay = document.getElementById('overlay');
     document.getElementById('clue').textContent = decodeClue();
     overlay.style.display = 'grid';
   }
 
-  // --- Controls ---
-  function jump(){ dino.jump(); }
+  // --- Enhanced Controls ---
+  function jump(){
+    if(running) dino.jump();
+  }
+
   addEventListener('keydown', (e)=>{
-    if(e.code==='Space' || e.code==='ArrowUp'){ e.preventDefault(); jump(); }
-    if(e.key==='r' || e.key==='R'){ reset(); }
+    if(e.code==='Space' || e.code==='ArrowUp'){
+      e.preventDefault();
+      jump();
+    }
+    if(e.key==='r' || e.key==='R'){
+      reset();
+    }
   });
+
   document.getElementById('jumpBtn').addEventListener('click', jump);
   document.getElementById('resetBtn').addEventListener('click', reset);
-  canvas.addEventListener('pointerdown', jump); // Mobile tap
+  canvas.addEventListener('pointerdown', jump);
 
-  // --- Overlay Buttons ---
+  // --- Enhanced Overlay Buttons ---
   document.getElementById('copyBtn').addEventListener('click', async ()=>{
     try{
       await navigator.clipboard.writeText(document.getElementById('clue').textContent);
-      // Using a simple alert for feedback as it's a temporary state
-      alert('Clue copied to clipboard!');
+      document.getElementById('copyBtn').innerHTML = '✅ Copied!';
+      setTimeout(() => {
+        document.getElementById('copyBtn').innerHTML = '📋 Copy clue';
+      }, 2000);
     } catch(e){
       alert('Failed to copy. Please copy manually.');
     }
   });
+
   document.getElementById('closeBtn').addEventListener('click', ()=>{
     document.getElementById('overlay').style.display='none';
     running = true;
     last = performance.now();
     requestAnimationFrame(loop);
   });
+
   document.getElementById('nextBtn').addEventListener('click', ()=>{
     const next = overrideNext || DEFAULT_NEXT_URL;
     if(next){
-      window.open(next, '_blank'); // Open in a new tab
+      window.open(next, '_blank');
     } else {
       alert('Organizer note: Next level URL is not set.');
     }
   });
 
-  // Start the game loop
+  // Add screen shake effect for collisions
+  function screenShake(){
+    const intensity = 5;
+    canvas.style.transform = `translate(${(Math.random()-0.5)*intensity}px, ${(Math.random()-0.5)*intensity}px)`;
+    setTimeout(() => {
+      canvas.style.transform = 'translate(0px, 0px)';
+    }, 100);
+  }
+
+  // Start the enhanced game loop
   requestAnimationFrame(loop);
 </script>
 </body>
